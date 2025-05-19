@@ -22,8 +22,8 @@ This codebase provides tools for data preprocessing, model definition, training,
 ### Steps
 1.  **Clone the repository (if applicable):**
     ```bash
-    git clone [your-repository-url]
-    cd fruit-vqa-project
+    git clone https://github.com/traananhdat/mul_vqa_fruit_recogn.git
+    cd mul_vqa_fruit_recogn
     ```
 
 2.  **Create and activate a virtual environment (recommended):**
