@@ -1,0 +1,116 @@
+# src/configs/base_config.yaml
+
+# Base Configuration for the Fruit VQA Model
+# This file provides default settings. These can be overridden by command-line arguments
+# or by specific experiment configuration files.
+
+# Data Parameters
+data:
+  # Paths to processed annotation files.
+  # These are typically overridden by command-line arguments in train.py or evaluate.py.
+  # Example placeholders:
+  # train_annotations_path: "../data/processed/TLU-Fruit/train_tlu_fruit_processed.json"
+  # val_annotations_path: "../data/processed/TLU-Fruit/val_tlu_fruit_processed.json"
+  # test_annotations_path: "../data/processed/TLU-Fruit/test_tlu_fruit_processed.json"
+
+  top_k_answers: 1000   # Number of most frequent answers to include in the VQA vocabulary.
+                        # This determines num_vqa_answer_classes dynamically.
+  question_type_mapping: # Mapping for the question filter task labels
+    agricultural: 1      # Label for agriculture-related questions (as per paper's ~65%)
+    other: 0             # Label for other/non-relevant questions
+    unknown: 0           # Fallback for any unspecifiied types encountered during preprocessing
+
+# Model Architecture Parameters (should align with model_architecture.py DEFAULT_CONFIG)
+model:
+  # Vision Transformer (ViT) settings for each of the 3 image streams
+  vit_model_name: "google/vit-base-patch16-224-in21k" # Pre-trained ViT model from Hugging Face
+  vit_pretrained: True
+  vit_img_size: 224       # Input image size for ViT
+  vit_patch_size: 16      # Patch size for ViT
+  vit_hidden_size: 768    # Output dimension of ViT's [CLS] token/pooler
+  vit_num_layers: 12      # Number of Transformer layers in ViT
+  vit_num_heads: 12       # Number of attention heads in ViT
+
+  # BERT settings for text processing
+  bert_model_name: "bert-base-uncased" # Pre-trained BERT model from Hugging Face
+  bert_pretrained: True
+  bert_hidden_size: 768   # Output dimension of BERT's [CLS] token/pooler
+  max_token_length: 128   # Max sequence length for BERT tokenizer (questions/answers)
+
+  # Visual Path Aggregation and Encoding
+  visual_streams: 3       # Number of input image streams (original, segmented, cropped)
+  visual_encoder_input_dim_proj: 768 # Dimension after projecting concatenated features from 3 ViT streams
+  visual_encoder_dim: 768            # Hidden dimension of the "Visual Encoder" (Transformer layers)
+  visual_encoder_layers: 4           # Number of layers in the Visual Encoder. Paper mentions 12 (Table 1 "BertLayer"),
+                                     # using a smaller default here for potentially faster prototyping.
+  visual_encoder_heads: 8            # Number of attention heads in the Visual Encoder
+  visual_encoder_dropout: 0.1      # Dropout rate in the Visual Encoder
+
+  # PCA Module (as per paper, input 768-dim visual features)
+  pca_input_dim: 768                 # Should match visual_encoder_dim (output of Visual Encoder)
+  pca_output_dim: 768                # Output dimension after PCA transformation.
+                                     # If 768, PCA transforms features, not strictly reducing dimensionality for fusion input.
+  # For true pre-fitted PCA, you would add paths to saved PCA components here:
+  # pca_pre_fitted_mean_path: null   # Path to .npy file for PCA mean
+  # pca_pre_fitted_components_path: null # Path to .npy file for PCA components
+
+  # Fusion Module (as per paper's "Fusion Transformer")
+  # fusion_input_concat_dim will be calculated as pca_output_dim + bert_hidden_size by the model.
+  # It should be 768 (visual) + 768 (text) = 1536 based on Table 1.
+  fusion_hidden_dim: 512             # Output dimension of the fusion module
+  fusion_dropout: 0.5                # Dropout rate in the Fusion Module
+
+  # Output Heads
+  num_question_filter_classes: 2     # For "Question with fruit" vs "Question w/o fruit"
+  # num_vqa_answer_classes is determined dynamically by data_loader.py (top_k_answers + special tokens)
+  # A placeholder can be set if some part of the code needs it before data loading,
+  # but it will be overridden.
+  # num_vqa_answer_classes_placeholder: 1002 # Example: top_k_answers + UNK_TOKEN + PAD_TOKEN
+
+
+# Training Parameters
+training:
+  output_dir: "../experiments/default_run" # Base directory to save checkpoints, logs, etc.
+  seed: 42
+  device: "cuda"        # "cuda" or "cpu"
+  epochs: 50            # As mentioned in the paper
+  batch_size: 32        # As mentioned in the paper
+  num_workers: 4        # For DataLoader
+
+  # Optimizer (Paper mentions AdamW with specific betas)
+  optimizer_name: "AdamW"
+  learning_rate: 0.00005  # Initial learning rate (e.g., paper's 5e-5 for first 3 epochs)
+                         # The paper has a complex schedule; this is a starting base LR.
+  adam_beta1: 0.8        # As per paper (Section 4.1)
+  adam_beta2: 0.96       # As per paper (Section 4.1)
+  weight_decay: 0.01     # Common default for AdamW, adjust as needed (L2 regularization)
+  grad_clip: 1.0         # Max norm for gradient clipping, null or 0 to disable
+
+  # Learning Rate Scheduler
+  lr_scheduler:
+    name: "ReduceLROnPlateau" # Options: "ReduceLROnPlateau", "StepLR", "CosineAnnealingLR", "None"
+    # Parameters for ReduceLROnPlateau
+    patience: 5               # Number of epochs with no improvement after which LR is reduced
+    factor: 0.1               # Factor by which the learning rate will be reduced
+    # Parameters for StepLR (if used)
+    # step_size: 10
+    # gamma: 0.1
+
+  early_stopping_patience: 10 # Number of epochs with no improvement on val metric to stop training.
+                              # 0 or null to disable.
+
+  # Loss Function Weights (for the multi-task learning)
+  # Corresponds to lambda values for weighting different loss components.
+  # Paper Eq.4: L_total = lambda1*L_CE + lambda2*L_MSE + lambda3*L_PCA + L_reg
+  # Here, we define weights for the CrossEntropy losses of our two output heads.
+  # The L_PCA and L_MSE components are not directly implemented in the current model structure's training.
+  # L_reg is handled by optimizer's weight_decay.
+  lambda_filter_loss: 0.5    # Weight for the question filter task loss
+  lambda_vqa_loss: 0.5       # Weight for the VQA answer task loss
+
+
+# Evaluation Parameters (can also be a separate config file or section)
+evaluation:
+  batch_size: 32             # Batch size for evaluation (can be same or different from training)
+  wups_threshold: 0.9        # Threshold for calculating WUPS@0.9 accuracy
+  # Other evaluation-specific settings can go here

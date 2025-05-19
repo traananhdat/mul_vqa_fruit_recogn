@@ -1,0 +1,81 @@
+# src/configs/tlu_fruit_config.yaml
+
+# Configuration for training/evaluating on the TLU-Fruit dataset.
+# This file can override settings from a base_config.yaml.
+
+# Data Parameters
+data:
+  # --- IMPORTANT: Update these paths to your processed TLU-Fruit annotation files ---
+  train_annotations_path: "../data/processed/TLU-Fruit/train_tlu_fruit_processed.json" # Example path
+  val_annotations_path: "../data/processed/TLU-Fruit/val_tlu_fruit_processed.json"     # Example path
+  test_annotations_path: "../data/processed/TLU-Fruit/test_tlu_fruit_processed.json"    # Example path
+
+  top_k_answers: 1000   # Default from base_config.yaml. Adjust based on TLU-Fruit answer distribution analysis.
+                        # This determines `num_vqa_answer_classes` for this experiment.
+
+  # For TLU-Fruit, the question filter task is central.
+  # The paper states ~65% questions are agriculture-related.
+  # This mapping should be consistent with how 'question_type' was saved in preprocessing.
+  question_type_mapping:
+    agricultural: 1      # Label for agriculture-related questions
+    other: 0             # Label for other/non-relevant questions
+    unknown: 0           # Fallback for any unspecified types
+
+
+# Model Architecture Parameters
+# Most model architecture parameters will likely be inherited from base_config.yaml,
+# as the model was designed with this dataset in mind.
+model:
+  # vit_model_name, bert_model_name, hidden_sizes, etc., are typically the same as base_config.
+  max_token_length: 128 # Default from base_config.yaml
+
+  # num_question_filter_classes remains 2.
+  # num_vqa_answer_classes will be set dynamically based on data.top_k_answers for TLU-Fruit.
+
+
+# Training Parameters
+training:
+  output_dir: "../experiments/tlu_fruit_run_01" # Specific output directory for this experiment
+  seed: 42
+
+  # Hyperparameters based on the paper (Section 4.1 Pre-training setup)
+  epochs: 50
+  batch_size: 32
+  
+  # Learning Rate: Paper mentions a specific schedule.
+  # Initial LR: 5e-5 for first 3 epochs.
+  # For this config, we set the initial LR. The train.py script's scheduler
+  # (e.g., ReduceLROnPlateau) will manage it from there.
+  # Implementing the paper's exact multi-step schedule requires custom LR scheduler logic in train.py.
+  learning_rate: 0.00005 # 5e-5
+
+  optimizer_name: "AdamW"
+  adam_beta1: 0.8        # As per paper (Section 4.1)
+  adam_beta2: 0.96       # As per paper (Section 4.1)
+  weight_decay: 0.01     # L2 regularization, common default
+  grad_clip: 1.0         # Max norm for gradient clipping, null or 0 to disable
+
+  lr_scheduler:
+    name: "ReduceLROnPlateau" # Or "StepLR", or "None" if using a custom schedule in train.py
+    patience: 5               # For ReduceLROnPlateau
+    factor: 0.1               # For ReduceLROnPlateau
+    # step_size: 15           # Example for StepLR
+    # gamma: 0.1              # Example for StepLR
+
+  early_stopping_patience: 10
+
+  # Loss Weights for TLU-Fruit:
+  # Both question filter and VQA tasks are active.
+  # The paper's Table 5 shows optimal lambdas for a loss L_total = L1*L_CE + L2*L_MSE + L3*L_PCA.
+  # Our train.py uses two CE losses: one for filter, one for VQA.
+  # We'll keep the default 0.5/0.5 split from base_config.yaml as a starting point,
+  # implying equal importance. These can be tuned.
+  # The paper's optimal lambda1=0.5 (for CE) might guide the VQA task weight if it's the main CE.
+  lambda_filter_loss: 0.5 # Weight for the question filter task loss
+  lambda_vqa_loss: 0.5    # Weight for the VQA answer task loss
+
+
+# Evaluation Parameters
+evaluation:
+  batch_size: 32
+  wups_threshold: 0.9 # WUPS@0.9 is reported for TLU-Fruit in the paper.

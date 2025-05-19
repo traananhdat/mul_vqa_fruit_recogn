@@ -1,0 +1,34 @@
+# requirements.txt
+
+# Core Deep Learning and Numerical Computation
+torch
+torchvision
+transformers
+numpy
+pandas
+
+# Machine Learning Utilities and Metrics
+scikit-learn
+
+# Plotting and Image Handling
+matplotlib
+seaborn
+Pillow # PIL fork
+
+# Progress Bars
+tqdm
+
+# Natural Language Processing (for WUPS score in evaluation)
+nltk
+
+# Configuration File Handling (for .yaml configs)
+PyYAML
+
+# Jupyter environment (if running notebooks)
+# These are often installed in a global or virtual environment for notebook usage
+# rather than being strict project runtime dependencies if you only deploy scripts.
+# jupyterlab
+# notebook
+
+# Optional: For testing, if you use pytest
+# pytest

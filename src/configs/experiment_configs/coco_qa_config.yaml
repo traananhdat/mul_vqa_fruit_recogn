@@ -1,0 +1,75 @@
+# src/configs/coco_qa_config.yaml
+
+# Configuration for training/evaluating on the COCO-QA dataset.
+# This file can override settings from a base_config.yaml.
+
+# Data Parameters
+data:
+  # --- IMPORTANT: Update these paths to your processed COCO-QA annotation files ---
+  train_annotations_path: "../data/processed/COCO-QA/train_coco_qa_processed.json" # Example path
+  val_annotations_path: "../data/processed/COCO-QA/val_coco_qa_processed.json"     # Example path
+  test_annotations_path: "../data/processed/COCO-QA/test_coco_qa_processed.json"    # Example path
+
+  top_k_answers: 3000   # COCO-QA might have a larger common answer vocabulary.
+                        # Standard VQA models often use top 2k-3k answers. Adjust as needed.
+                        # This will determine `num_vqa_answer_classes` for this experiment.
+
+  # For COCO-QA, all questions are general. The "agricultural" filter is not applicable.
+  # We'll map all COCO-QA questions to the 'other' category for the filter head.
+  # The loss for this filter task can be set to 0 during training on COCO-QA.
+  question_type_mapping:
+    coco_qa_general: 0 # Map all COCO-QA questions to the 'other' (or a default non-agricultural) category index.
+    # Ensure your TLUFruitDataset in data_loader.py can handle a default if a question_type
+    # from the annotation file doesn't exactly match a key here, or ensure your
+    # COCO-QA preprocessed JSON has a 'question_type' column with 'coco_qa_general'.
+    # Alternatively, if 'question_type' is missing for COCO-QA, data_loader can assign a default.
+
+
+# Model Architecture Parameters
+# Most model architecture parameters will likely be inherited from base_config.yaml
+# to test the same model structure. Only override if necessary for COCO-QA.
+model:
+  # vit_model_name, bert_model_name, hidden_sizes, etc., are likely the same as base_config.
+  # max_token_length might be adjusted if COCO-QA questions/answers have different typical lengths,
+  # but 128 is often a reasonable default.
+  max_token_length: 128
+
+  # num_question_filter_classes remains 2 (as per model architecture),
+  # but its training will be handled by lambda_filter_loss.
+  # num_vqa_answer_classes will be set dynamically based on data.top_k_answers for COCO-QA.
+
+
+# Training Parameters
+training:
+  output_dir: "../experiments/coco_qa_run_01" # Specific output directory for this experiment
+  seed: 42 # Keep consistent or vary for robustness checks
+
+  # Hyperparameters might need tuning for COCO-QA vs. TLU-Fruit
+  epochs: 30             # COCO-QA is larger, might converge differently or require fewer/more epochs.
+  batch_size: 64         # Can often be larger for bigger standard datasets if GPU memory allows.
+  learning_rate: 0.00005 # Initial learning rate, potentially tune for COCO-QA.
+
+  optimizer_name: "AdamW"
+  adam_beta1: 0.8
+  adam_beta2: 0.96
+  weight_decay: 0.01
+  grad_clip: 1.0
+
+  lr_scheduler:
+    name: "ReduceLROnPlateau"
+    patience: 3
+    factor: 0.2
+
+  early_stopping_patience: 7
+
+  # Loss Weights for COCO-QA:
+  # The "question filter" task (agricultural vs. other) is not relevant to general COCO-QA.
+  # Set its loss weight to 0, and focus entirely on the VQA task.
+  lambda_filter_loss: 0.0
+  lambda_vqa_loss: 1.0   # VQA task is the primary focus for COCO-QA.
+
+
+# Evaluation Parameters
+evaluation:
+  batch_size: 64 # Can be same or different from training
+  wups_threshold: 0.9 # WUPS metric is applicable to general VQA.
